@@ -1,0 +1,6 @@
+package deer;
+
+component Health {
+  id = 10005;
+  uint32 remaining_health = 10006;
+}

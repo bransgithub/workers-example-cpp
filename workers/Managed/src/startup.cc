@@ -6,12 +6,20 @@
 #include <improbable/view.h>
 #include <iostream>
 #include <thread>
-#include <special.h>
-#include <dummy.h>
+#include <deer.h>
+#include <hunter.h>
 
 // Use this to make a worker::ComponentRegistry.
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
-using ComponentRegistry = worker::Components<dummy::Name, special::Health, special::Name, improbable::Position, improbable::EntityAcl, improbable::Metadata, improbable::Interest>;
+using ComponentRegistry = worker::Components<
+    deer::Health, 
+    hunter::Health, 
+    hunter::Name, 
+    improbable::Position, 
+    improbable::EntityAcl, 
+    improbable::Metadata, 
+    improbable::Interest
+>;
 
 // Constants and parameters
 const int ErrorExitStatus = 1;
@@ -40,102 +48,142 @@ std::string get_random_characters(size_t count) {
     return str;
 }
 
-class SpecialTest {
+enum WorkerAttribute {
+    simulation = 0,
+    AI = 1,
+    client = 2
+};
+
+static const std::string WorkerAttributeStrings[] = {"simulation", "AI", "client"};
+
+class Hunter {
     public:
         uint32_t health;
         std::string firstName;
         std::string lastName;
 
-    SpecialTest(uint32_t _health, std::string _firstName, std::string _lastName) {
+    Hunter(uint32_t _health, std::string _firstName, std::string _lastName) {
         health = _health;
         firstName = _firstName;
         lastName = _lastName;
     }
 };
 
-void AddSpecialEntityAcl(worker::Entity& entity) {
-    static const std::string simulation = "simulation";
-    static const std::string client = "client";
-    static const std::string dummy = "dummy";
-
+void AddHunterEntityAcl(worker::Entity& entity, worker::List<WorkerAttribute> read_access, WorkerAttribute write_access) {
     //Start with the attribute set based on the worker attribute (defined in spatialos worker JSON)
-    worker::List<std::string> simulationWorkerAttributeSet{simulation};
-    worker::List<std::string> clientWorkerAttributeSet{client};
-    worker::List<std::string> dummyWorkerAttributeSet{dummy};
+    worker::List<std::string> writer {{WorkerAttributeStrings[write_access]}};
+    worker::List<std::string> readers;
 
-    //Requirement set to match any worker with 'simulation' attribute
-    improbable::WorkerRequirementSet simulationWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{simulationWorkerAttributeSet}}
+    for (auto worker : read_access) {
+        readers.emplace_back(WorkerAttributeStrings[worker]);
+    }
+
+    //Requirement sets to match any of the reader or writer attributes
+    improbable::WorkerRequirementSet reader_requirement_set {
+        worker::List<improbable::WorkerAttributeSet>{{readers}}
     };
 
-    //Match clients
-    improbable::WorkerRequirementSet clientWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{clientWorkerAttributeSet}}
+    improbable::WorkerRequirementSet writer_requirement_set {
+        worker::List<improbable::WorkerAttributeSet>{{writer}}
     };
 
-    improbable::WorkerRequirementSet dummyWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{dummyWorkerAttributeSet}}
+    //Grant writer access authority to all current components used
+    worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> component_acl {
+        {improbable::Position::ComponentId, writer_requirement_set},
+        {improbable::EntityAcl::ComponentId, writer_requirement_set},
+        {hunter::Health::ComponentId, writer_requirement_set},
+        {hunter::Name::ComponentId, writer_requirement_set}
     };
 
-    //Match any 'client' or 'simulation' worker attributes
-    improbable::WorkerRequirementSet clientOrSimulationRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{
-            clientWorkerAttributeSet,
-            simulationWorkerAttributeSet
-        },
-    };
-
-    improbable::WorkerRequirementSet allWorkersRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{
-            clientWorkerAttributeSet,
-            simulationWorkerAttributeSet,
-            dummyWorkerAttributeSet
-        },
-    };
-
-    //Give authority over Position, EntityAcl, Health and Name fields:
-    worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> componentAcl {
-        {improbable::Position::ComponentId, simulationWorkerRequirementSet},
-        {improbable::EntityAcl::ComponentId, simulationWorkerRequirementSet},
-        {special::Health::ComponentId, simulationWorkerRequirementSet},
-        {special::Name::ComponentId, simulationWorkerRequirementSet}
-    };
-
-    //Add to the EntityACl component, Read access for the clientOrSimulationRequirementSet and write access for componentAcl
+    //Add to the EntityACl component, Read access for the reader requirement set and write access for writer requirement set
     entity.Add<improbable::EntityAcl>(improbable::EntityAcl::Data{
-                                        /*Read access Here*/ allWorkersRequirementSet, 
-                                        /*Write access Here*/ componentAcl});
+                                        /*Read access Here*/ reader_requirement_set, 
+                                        /*Write access Here*/ component_acl});
 }
 
-void AddDummyEntityAcl(worker::Entity& entity) {
-
-    static const std::string simulation = "simulation";
-    static const std::string dummy = "dummy";
-
+void AddDeerEntityAcl(worker::Entity& entity, worker::List<WorkerAttribute> read_access, WorkerAttribute write_access) {
     //Start with the attribute set based on the worker attribute (defined in spatialos worker JSON)
-    worker::List<std::string> simulationWorkerAttributeSet{simulation};
-    worker::List<std::string> dummyWorkerAttributeSet{dummy};
+    worker::List<std::string> writer {{WorkerAttributeStrings[write_access]}};
+    worker::List<improbable::WorkerAttributeSet> reader_attribute_set;
 
-    //Requirement set to match any worker with 'simulation' attribute
-    improbable::WorkerRequirementSet simulationWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{simulationWorkerAttributeSet}}
+    //Requirement sets to match any of the reader or writer attributes
+    for (auto worker : read_access) {
+        reader_attribute_set.emplace_back(
+            improbable::WorkerAttributeSet {
+                worker::List<std::string> { WorkerAttributeStrings[worker] }
+            }
+        );
+    }
+
+    improbable::WorkerRequirementSet reader_requirement_set {reader_attribute_set};
+
+    improbable::WorkerRequirementSet writer_requirement_set {
+        worker::List<improbable::WorkerAttributeSet>{{writer}}
     };
 
-    improbable::WorkerRequirementSet dummyWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{dummyWorkerAttributeSet}}
+    //Grant writer access authority to all current components used
+    worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> component_acl {
+        {improbable::Position::ComponentId, writer_requirement_set},
+        {improbable::EntityAcl::ComponentId, writer_requirement_set},
+        {deer::Health::ComponentId, writer_requirement_set}
     };
 
-    worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> componentAcl {
-        {dummy::Name::ComponentId, dummyWorkerRequirementSet}
-    };
-
+    //Add to the EntityACl component, Read access for the reader requirement set and write access for writer requirement set
     entity.Add<improbable::EntityAcl>(improbable::EntityAcl::Data{
-                                        /*Read access Here*/ simulationWorkerRequirementSet, 
-                                        /*Write access Here*/ componentAcl});
+                                        /*Read access Here*/ reader_requirement_set, 
+                                        /*Write access Here*/ component_acl});
 }
 
-void CreateSpecialEntity(worker::Connection& connection, worker::View& view, SpecialTest specialTest) {
-    std::cout << "Starting special entity creation... " << std::endl;
+void AddHunterInterestSphere(worker::Entity& entity) {
+    std::cout << "Adding entity sphere interest..." << std::endl;
+
+    const worker::Option<improbable::ComponentInterest_SphereConstraint> sphere_constraint{
+            improbable::ComponentInterest_SphereConstraint(improbable::Coordinates{1, 2, 3}, 2000)
+    };
+
+    improbable::ComponentInterest_QueryConstraint query_constraint(
+        /*Sphere*/ sphere_constraint,
+        /*Cylinder*/{},
+        /*Box*/ {},
+        /*Relative Sphere*/ {},
+        /*Relative Cylinder*/ {},
+        /*Relative Box*/ {},
+        /*Entity ID*/ {},
+        /*Component ID*/ {},
+        /*And Constraints*/ {},
+        /*Or Constraints*/ {}
+    );
+
+    auto interest = improbable::ComponentInterest {
+        worker::List<improbable::ComponentInterest_Query> {
+            improbable::ComponentInterest_Query {
+                /*Constraint*/ query_constraint,
+                /*Full Snapshot*/ worker::Option<bool> {false},
+                /*Result Component IDs*/ worker::List<uint32_t>{
+                    deer::Health::ComponentId,
+                    improbable::Position::ComponentId,
+                    improbable::EntityAcl::ComponentId
+                },
+                /*Frequency*/ worker::Option<float> {30}
+            }
+        }
+    };
+
+    //Grant 'interest' to the dummy::Name component, so anything w/ write access authority
+    //over dummy::Name gets interested
+    entity.Add<improbable::Interest>(
+        improbable::InterestData {
+            worker::Map<uint, improbable::ComponentInterest> {
+                {hunter::Name::ComponentId, interest}
+            }
+        }
+    );
+
+    std::cout << "Entity sphere interest added!" << std::endl;
+}
+
+void CreateHunterEntity(worker::Connection& connection, worker::View& view, Hunter hunter, worker::List<WorkerAttribute> readers, WorkerAttribute writer) {
+    std::cout << "Starting hunter entity creation... " << std::endl;
     //Entity Creation
     worker::RequestId<worker::CreateEntityRequest> entity_creation_request_id;
 
@@ -144,13 +192,14 @@ void CreateSpecialEntity(worker::Connection& connection, worker::View& view, Spe
 
     //Next, we create an entity with the reserved ID.
     //This registers a function as the callback when entity ID reservation is successful
-    view.OnReserveEntityIdsResponse([entity_id_reservation_request_id, &connection, &entity_creation_request_id, specialTest](const worker::ReserveEntityIdsResponseOp& op){
+    view.OnReserveEntityIdsResponse([entity_id_reservation_request_id, &connection, &entity_creation_request_id, hunter, readers, writer](const worker::ReserveEntityIdsResponseOp& op){
         if (op.RequestId == entity_id_reservation_request_id && op.StatusCode == worker::StatusCode::kSuccess) {
             worker::Entity entity;
             entity.Add<improbable::Position>({{1, 2, 3}});
-            entity.Add<special::Health>({specialTest.health});
-            entity.Add<special::Name>({specialTest.firstName, specialTest.lastName});
-            AddSpecialEntityAcl(entity);
+            entity.Add<hunter::Health>({hunter.health});
+            entity.Add<hunter::Name>({hunter.firstName, hunter.lastName});
+            AddHunterEntityAcl(entity, readers, writer);
+            AddHunterInterestSphere(entity);
 
             auto result = connection.SendCreateEntityRequest(entity, op.FirstEntityId, 500);
             if (result) {
@@ -166,65 +215,8 @@ void CreateSpecialEntity(worker::Connection& connection, worker::View& view, Spe
     });
 }
 
-void AddDummyEntityInterestSphere(worker::Entity& entity) {
-    std::cout << "Adding entity sphere interest..." << std::endl;
-
-    const worker::Option<improbable::ComponentInterest_SphereConstraint> sphere_constraint{
-            improbable::ComponentInterest_SphereConstraint(improbable::Coordinates{1, 2, 3}, 1000)
-    };
-
-    const worker::Option<worker::EntityId> entity_id_constraint{
-        500
-    };
-
-    const worker::Option<uint32_t> special_health_component_constraint{
-        special::Health::ComponentId
-    };
-
-    improbable::ComponentInterest_QueryConstraint query_constraint(
-        /*Sphere*/ sphere_constraint,
-        /*Cylinder*/{},
-        /*Box*/ {},
-        /*Relative Sphere*/ {},
-        /*Relative Cylinder*/ {},
-        /*Relative Box*/ {},
-        /*Entity ID*/ {},
-        /*Component ID*/ {},
-        /*And Constraints*/ {},
-        /*Or Constraints*/ {}
-    );
-
-    auto dummy_interest = improbable::ComponentInterest {
-        worker::List<improbable::ComponentInterest_Query> {
-            improbable::ComponentInterest_Query {
-                /*Constraint*/ query_constraint,
-                /*Full Snapshot*/ worker::Option<bool> {false},
-                /*Result Component IDs*/ worker::List<uint32_t>{
-                    special::Health::ComponentId,
-                    special::Name::ComponentId,
-                    improbable::Position::ComponentId,
-                    improbable::EntityAcl::ComponentId
-                },
-                /*Frequency*/ worker::Option<float> {30}
-            }
-        }
-    };
-
-    //Grant 'interest' to the dummy::Name component, so anything w/ write access authority
-    //over dummy::Name gets interested
-    entity.Add<improbable::Interest>(
-        improbable::InterestData {
-            worker::Map<uint, improbable::ComponentInterest> {
-                {dummy::Name::ComponentId, dummy_interest}
-            }
-        }
-    );
-
-    std::cout << "Entity sphere interest added!" << std::endl;
-}
-
-void CreateDummyEntity(worker::Connection& connection, worker::View& view, std::string name) {
-    std::cout << "Starting dummy entity creation... " << std::endl;
+void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32_t health, worker::List<WorkerAttribute> readers, WorkerAttribute writer) {
+    std::cout << "Starting hunter entity creation... " << std::endl;
     //Entity Creation
     worker::RequestId<worker::CreateEntityRequest> entity_creation_request_id;
 
@@ -233,134 +225,17 @@ void CreateDummyEntity(worker::Connection& connection, worker::View& view, std::
 
     //Next, we create an entity with the reserved ID.
     //This registers a function as the callback when entity ID reservation is successful
-    view.OnReserveEntityIdsResponse([entity_id_reservation_request_id, &connection, &entity_creation_request_id, name](const worker::ReserveEntityIdsResponseOp& op){
+    view.OnReserveEntityIdsResponse([entity_id_reservation_request_id, &connection, &entity_creation_request_id, health, readers, writer](const worker::ReserveEntityIdsResponseOp& op){
         if (op.RequestId == entity_id_reservation_request_id && op.StatusCode == worker::StatusCode::kSuccess) {
             worker::Entity entity;
-            entity.Add<improbable::Position>({{4, 5, 6}});
-            entity.Add<dummy::Name>({name});
-            AddDummyEntityAcl(entity);
-            AddDummyEntityInterestSphere(entity);
+            entity.Add<improbable::Position>({{1, 2, 3}});
+            entity.Add<deer::Health>({health});
+            AddDeerEntityAcl(entity, readers, writer);
 
             auto result = connection.SendCreateEntityRequest(entity, op.FirstEntityId, 500);
             if (result) {
                 connection.SendLogMessage(worker::LogLevel::kDebug, "Creating Entity", "Successfully created entity");
-                std::cout << "[local] Successful dummy entity creation!" << std::endl;
-                entity_creation_request_id = *result;
-            } else {
-                connection.SendLogMessage(worker::LogLevel::kError, "Creating Entity", result.GetErrorMessage());
-                std::cout << "[local] Failed to create entity: " << result.GetErrorMessage() << std::endl;
-                std::terminate();
-            }
-        }
-    });
-}
-
-void AddExternalEntityAcl(worker::Entity& entity) {
-
-    static const std::string simulation = "simulation";
-    static const std::string client = "client";
-
-    //Start with the attribute set based on the worker attribute (defined in spatialos worker JSON)
-    worker::List<std::string> simulationWorkerAttributeSet{simulation};
-    worker::List<std::string> clientWorkerAttributeSet{client};
-
-    //Requirement set to match any worker with 'simulation' attribute
-    improbable::WorkerRequirementSet simulationWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{clientWorkerAttributeSet}}
-    };
-
-    improbable::WorkerRequirementSet clientWorkerRequirementSet{
-        worker::List<improbable::WorkerAttributeSet>{{clientWorkerAttributeSet}}
-    };
-
-    worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> componentAcl {
-        {dummy::Name::ComponentId, clientWorkerRequirementSet}
-    };
-
-    entity.Add<improbable::EntityAcl>(improbable::EntityAcl::Data{
-                                        /*Read access Here*/ simulationWorkerRequirementSet, 
-                                        /*Write access Here*/ componentAcl});
-}
-
-void AddExternalEntityInterestSphere(worker::Entity& entity) {
-    std::cout << "Adding entity sphere interest..." << std::endl;
-
-    const worker::Option<improbable::ComponentInterest_SphereConstraint> sphere_constraint{
-            improbable::ComponentInterest_SphereConstraint(improbable::Coordinates{1, 2, 3}, 1000)
-    };
-
-    const worker::Option<worker::EntityId> entity_id_constraint{
-        500
-    };
-
-    const worker::Option<uint32_t> special_health_component_constraint{
-        special::Health::ComponentId
-    };
-
-    improbable::ComponentInterest_QueryConstraint query_constraint(
-        /*Sphere*/ sphere_constraint,
-        /*Cylinder*/{},
-        /*Box*/ {},
-        /*Relative Sphere*/ {},
-        /*Relative Cylinder*/ {},
-        /*Relative Box*/ {},
-        /*Entity ID*/ {},
-        /*Component ID*/ {},
-        /*And Constraints*/ {},
-        /*Or Constraints*/ {}
-    );
-
-    auto dummy_interest = improbable::ComponentInterest {
-        worker::List<improbable::ComponentInterest_Query> {
-            improbable::ComponentInterest_Query {
-                /*Constraint*/ query_constraint,
-                /*Full Snapshot*/ worker::Option<bool> {false},
-                /*Result Component IDs*/ worker::List<uint32_t>{
-                    special::Health::ComponentId,
-                    special::Name::ComponentId,
-                    improbable::Position::ComponentId,
-                    improbable::EntityAcl::ComponentId
-                },
-                /*Frequency*/ worker::Option<float> {30}
-            }
-        }
-    };
-
-    //Grant 'interest' to the dummy::Name component, so anything w/ write access authority
-    //over dummy::Name gets interested
-    entity.Add<improbable::Interest>(
-        improbable::InterestData {
-            worker::Map<uint, improbable::ComponentInterest> {
-                {dummy::Name::ComponentId, dummy_interest}
-            }
-        }
-    );
-
-    std::cout << "Entity sphere interest added!" << std::endl;
-}
-
-void CreateExternalEntity(worker::Connection& connection, worker::View& view, std::string name) {
-    std::cout << "Starting external entity creation... " << std::endl;
-    //Entity Creation
-    worker::RequestId<worker::CreateEntityRequest> entity_creation_request_id;
-
-    //First, reserve 1 Entity ID (timeout 500 ms)
-    worker::RequestId<worker::ReserveEntityIdsRequest> entity_id_reservation_request_id = connection.SendReserveEntityIdsRequest(1, 500);
-
-    //Next, we create an entity with the reserved ID.
-    //This registers a function as the callback when entity ID reservation is successful
-    view.OnReserveEntityIdsResponse([entity_id_reservation_request_id, &connection, &entity_creation_request_id, name](const worker::ReserveEntityIdsResponseOp& op){
-        if (op.RequestId == entity_id_reservation_request_id && op.StatusCode == worker::StatusCode::kSuccess) {
-            worker::Entity entity;
-            entity.Add<improbable::Position>({{4, 5, 6}});
-            entity.Add<dummy::Name>({name});
-            AddExternalEntityAcl(entity);
-            AddExternalEntityInterestSphere(entity);
-
-            auto result = connection.SendCreateEntityRequest(entity, op.FirstEntityId, 500);
-            if (result) {
-                connection.SendLogMessage(worker::LogLevel::kDebug, "Creating Entity", "Successfully created entity");
-                std::cout << "[local] Successful external entity creation!" << std::endl;
+                std::cout << "[local] Successful special entity creation!" << std::endl;
                 entity_creation_request_id = *result;
             } else {
                 connection.SendLogMessage(worker::LogLevel::kError, "Creating Entity", result.GetErrorMessage());
@@ -449,16 +324,21 @@ int main(int argc, char** argv) {
     }
 
     //Create entity test object
+    //For some reason, myWorker has 'simulation' attribute in inspector instead of 'AI' attribute
     for (int i = 0; i < 1000; i++) {
-        CreateSpecialEntity(connection, view, SpecialTest(444, "Ben", "Moser"));
+        CreateDeerEntity(connection, view, 100,
+            worker::List<WorkerAttribute> {WorkerAttribute::AI, WorkerAttribute::client, WorkerAttribute::simulation}, 
+            WorkerAttribute::simulation
+        );
     }
 
-    CreateDummyEntity(connection, view, "J0SH");
-    CreateExternalEntity(connection, view, "EXT3RNAL");
+    CreateHunterEntity(connection, view, Hunter(444, "Joshie", "Hunter"), 
+        worker::List<WorkerAttribute> {WorkerAttribute::AI, WorkerAttribute::client, WorkerAttribute::simulation},
+        WorkerAttribute::AI
+    );
 
     //Update variables 
-    special::Health::Update health_update;
-    special::Name::Update name_update;
+    deer::Health::Update deer_health_update;
 
     //Random number between lower and upper bounds, inclusive
     auto random_health = [](int lower, int upper) {
@@ -483,13 +363,10 @@ int main(int argc, char** argv) {
             std::cout << "Updating entity ID " << entity_id << std::endl;
 
             //Make random values:
-            health_update.set_remaining(random_health(0, 100));
-            name_update.set_first(get_random_characters(5));
-            name_update.set_last(get_random_characters(8));
+            deer_health_update.set_remaining_health(random_health(0, 100));
 
             //Send updates to SpatialOS!
-            connection.SendComponentUpdate<special::Health>(entity_id, health_update);
-            connection.SendComponentUpdate<special::Name>(entity_id, name_update);
+            connection.SendComponentUpdate<deer::Health>(entity_id, deer_health_update);
 
             std::cout << "End Entity update" << std::endl;
         }

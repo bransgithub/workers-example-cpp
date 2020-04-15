@@ -1,6 +1,0 @@
-package external;
-
-component Name {
-    id = 10018;
-    string name = 10019;
-}

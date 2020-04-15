@@ -1,0 +1,13 @@
+package hunter;
+
+component Health {
+  id = 10016;
+  uint32 remaining_health = 10017;
+}
+
+component Name {
+  id = 10018;
+  string first_name = 10019;
+  string last_name = 10020;
+}
+

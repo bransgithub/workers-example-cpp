@@ -5,7 +5,7 @@
   "bridge": {
     "worker_attribute_set": {
       "attributes": [
-        "dummy"
+        "AI"
       ]
     },
     "component_delivery": {

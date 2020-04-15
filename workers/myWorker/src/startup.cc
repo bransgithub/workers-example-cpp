@@ -6,12 +6,20 @@
 #include <improbable/view.h>
 #include <iostream>
 #include <thread>
-#include <special.h>
-#include <dummy.h>
+#include <deer.h>
+#include <hunter.h>
 
 // Use this to make a worker::ComponentRegistry.
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
-using ComponentRegistry = worker::Components<dummy::Name, special::Health, special::Name, improbable::Position, improbable::EntityAcl, improbable::Metadata, improbable::Interest>;
+using ComponentRegistry = worker::Components<
+    deer::Health, 
+    hunter::Health, 
+    hunter::Name, 
+    improbable::Position, 
+    improbable::EntityAcl, 
+    improbable::Metadata, 
+    improbable::Interest
+>;
 
 // Constants and parameters
 const int ErrorExitStatus = 1;
@@ -38,21 +46,6 @@ std::string get_random_characters(size_t count) {
     std::string str(count, 0);
     std::generate_n(str.begin(), count, randchar);
     return str;
-}
-
-void AddEntityInterestById(worker::Connection& connection, worker::EntityId entity_id) {
-
-    std::cout << "Adding interest for entity id " << entity_id << std::endl;
-
-    connection.SendComponentInterest(
-        entity_id,
-        {
-            {improbable::Position::ComponentId, worker::InterestOverride{/* IsInterested */ true}},
-            {improbable::EntityAcl::ComponentId, worker::InterestOverride{/* IsInterested */ true}},
-            {special::Health::ComponentId, worker::InterestOverride{/* IsInterested */ true}},
-            {special::Name::ComponentId, worker::InterestOverride{/* IsInterested */ true}}
-        }
-    );
 }
 
 // Entry point
@@ -134,6 +127,8 @@ int main(int argc, char** argv) {
 
     std::cout << "[local] Starting game loopie!" << std::endl;
 
+    hunter::Name::Update hunter_name_update;
+
     //This is the game loop :)
     while (is_connected) {
         //dispatcher.Process(connection.GetOpList(kGetOpListTimeoutInMilliseconds));
@@ -143,15 +138,14 @@ int main(int argc, char** argv) {
         //Process ops so entities and components get added automatically
         view.Process(ops);
 
-        //Add entity interest
-        
-        /*
         for (auto it = view.Entities.begin(); it != view.Entities.end(); it++) {
             auto entity_id = it -> first;
-            AddEntityInterestById(connection, entity_id);
+
+            hunter_name_update.set_first_name(get_random_characters(5));
+            hunter_name_update.set_last_name(get_random_characters(8));
+
+            connection.SendComponentUpdate<hunter::Name>(entity_id, hunter_name_update);
         }
-        */
-        
 
         std::cout << "Ending game loop" << std::endl;
         //Now go to sleep for a bit to avoid excess changes

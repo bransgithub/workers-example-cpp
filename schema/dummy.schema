@@ -1,7 +1,0 @@
-package dummy;
-
-component Name {
-  id = 10016;
-  string name = 10017;
-}
-

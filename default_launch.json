@@ -20,7 +20,7 @@
         }
       },
       {
-        "layer": "dummy",
+        "layer": "AI",
         "rectangle_grid": {
           "cols": 1,
           "rows": 1

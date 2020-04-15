@@ -6,11 +6,20 @@
 #include <improbable/view.h>
 #include <iostream>
 #include <thread>
-#include <special.h>
+#include <deer.h>
+#include <hunter.h>
 
 // Use this to make a worker::ComponentRegistry. This worker doesn't use any components yet
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
-using ComponentRegistry = worker::Components<special::Health, special::Name, improbable::Position, improbable::EntityAcl, improbable::Metadata, improbable::Interest>;
+using ComponentRegistry = worker::Components<
+    deer::Health, 
+    hunter::Health, 
+    hunter::Name, 
+    improbable::Position, 
+    improbable::EntityAcl, 
+    improbable::Metadata, 
+    improbable::Interest
+>;
 
 // Constants and parameters
 const int ErrorExitStatus = 1;
