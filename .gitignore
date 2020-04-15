@@ -1,0 +1,15 @@
+# SpatialOS project build directory
+build/
+
+# Cache and other project metadata
+.spatialos/
+
+# Logs
+spatial.log
+logs/
+
+# Worker packages and other dependencies (be careful not to ignore the whole dependencies folder)
+dependencies/worker_sdk
+
+# Schema generated sources
+generated_code/

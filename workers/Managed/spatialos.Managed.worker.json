@@ -1,0 +1,81 @@
+{
+  "build": {
+    "tasks_filename": "build.json"
+  },
+  "bridge": {
+    "worker_attribute_set": {
+      "attributes": [
+        "simulation"
+      ]
+    },
+    "component_delivery": {
+      "default": "RELIABLE_ORDERED",
+      "checkout_all_initially": false,
+      "override": {}
+    }
+  },
+  "managed": {
+    "linux": {
+      "artifact_name": "Managed@Linux.zip",
+      "command": "./Managed",
+      "arguments": [
+        "receptionist",
+        "${IMPROBABLE_RECEPTIONIST_HOST}",
+        "${IMPROBABLE_RECEPTIONIST_PORT}",
+        "${IMPROBABLE_WORKER_ID}"
+      ]
+    },
+    "windows": {
+      "artifact_name": "Managed@Windows.zip",
+      "command": "./Managed.exe",
+      "arguments": [
+        "receptionist",
+        "${IMPROBABLE_RECEPTIONIST_HOST}",
+        "${IMPROBABLE_RECEPTIONIST_PORT}",
+        "${IMPROBABLE_WORKER_ID}"
+      ]
+    },
+    "macos": {
+      "artifact_name": "Managed@Mac.zip",
+      "command": "./Managed",
+      "arguments": [
+        "receptionist",
+        "${IMPROBABLE_RECEPTIONIST_HOST}",
+        "${IMPROBABLE_RECEPTIONIST_PORT}",
+        "${IMPROBABLE_WORKER_ID}"
+      ]
+    }
+  },
+  "external": {
+    "local": {
+      "run_type": "EXECUTABLE_ZIP",
+      "linux": {
+        "artifact_name": "Managed@Linux.zip",
+        "command": "./Managed",
+        "arguments": [
+          "receptionist",
+          "localhost",
+          "7777"
+        ]
+      },
+      "windows": {
+        "artifact_name": "Managed@Windows.zip",
+        "command": "./Managed.exe",
+        "arguments": [
+          "receptionist",
+          "localhost",
+          "7777"
+        ]
+      },
+      "macos": {
+        "artifact_name": "Managed@Mac.zip",
+        "command": "./Managed",
+        "arguments": [
+          "receptionist",
+          "localhost",
+          "7777"
+        ]
+      }
+    }
+  }
+}

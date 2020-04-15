@@ -1,0 +1,13 @@
+package special;
+
+component Health {
+  id = 10005;
+  uint32 remaining = 10006;
+}
+
+component Name {
+  id = 10013;
+  string first = 10014;
+  string last = 10015;
+}
+
