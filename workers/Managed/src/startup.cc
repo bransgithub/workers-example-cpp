@@ -386,15 +386,13 @@ int main(int argc, char** argv) {
     );
 
     view.OnCommandRequest<deer::Health::Commands::GotShot>(
-        [](const worker::CommandRequestOp<deer::Health::Commands::GotShot>& op) {
-            std::cout << "Command received" << op.TimeoutMillis << std::endl;
-            
-            /*
-            connection.SendCommandResponse<deer::Health::Commands::GotShot::Response>(
-                worker::RequestId<worker::IncomingCommandRequest<deer::Health::Commands::GotShot::Request>> {op.RequestId}, 
+        [&connection](const worker::CommandRequestOp<deer::Health::Commands::GotShot>& op) {
+            std::cout << "Command received to take " << op.Request.damage() << " damage" << std::endl;
+
+            connection.SendCommandResponse<deer::Health::Commands::GotShot>(
+                worker::RequestId<worker::IncomingCommandRequest<deer::Health::Commands::GotShot>> {op.RequestId}, 
                 deer::Health::Commands::GotShot::Response {}
             );
-            */
         }
     );
 

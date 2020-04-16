@@ -60,7 +60,7 @@ void SendDeerCommandRequest(worker::Connection& connection, worker::View& view) 
             {}
         );
 
-        std::cout << "Command sent to entity ID " << entity_id << std::endl;
+        std::cout << "Command sent: " << request.GetValue().Id << std::endl;
     }
 }
 
@@ -157,13 +157,12 @@ int main(int argc, char** argv) {
         }
     );
 
-/*
-    view.OnCommandResponse<deer::Health::Commands::GotShot::Response>(
-        [](const worker::CommandResponseOp<deer::Health::Commands::GotShot::Response>& op) {
-            std::cout << "Received response for command: " << op.Message << std::endl;
+    view.OnCommandResponse<deer::Health::Commands::GotShot>(
+        [](const worker::CommandResponseOp<deer::Health::Commands::GotShot>& op) {
+            std::cout << "Received response for command: " << op.RequestId.Id << std::endl;
         }
     );
-*/
+
     if (is_connected) {
         std::cout << "[local] Connected successfully to SpatialOS, listening to ops... " << std::endl;
     }
