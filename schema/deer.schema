@@ -1,6 +1,20 @@
 package deer;
 
+type SaidSomething {
+  string message = 1;
+}
+
+type Shot {
+  uint32 damage = 1;
+}
+
 component Health {
   id = 10005;
   uint32 remaining_health = 10006;
+  command Shot got_shot(Shot);
+}
+
+component Dialogue {
+  id = 10006;
+  event SaidSomething said_something;
 }

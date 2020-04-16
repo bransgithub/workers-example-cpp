@@ -13,6 +13,7 @@
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
 using ComponentRegistry = worker::Components<
     deer::Health, 
+    deer::Dialogue,
     hunter::Health, 
     hunter::Name, 
     improbable::Position, 
@@ -46,6 +47,21 @@ std::string get_random_characters(size_t count) {
     std::string str(count, 0);
     std::generate_n(str.begin(), count, randchar);
     return str;
+}
+
+void SendDeerCommandRequest(worker::Connection& connection, worker::View& view) {
+    const worker::Option<uint32_t> timeout_ms {500};
+
+    for (auto it = view.Entities.begin(); it != view.Entities.end(); it++) {
+        auto entity_id = it -> first;
+        auto request = connection.SendCommandRequest<deer::Health::Commands::GotShot>(
+            entity_id, deer::Health::Commands::GotShot::Request { deer::Shot{15} },
+            timeout_ms,
+            {}
+        );
+
+        std::cout << "Command sent to entity ID " << entity_id << std::endl;
+    }
 }
 
 // Entry point
@@ -121,11 +137,38 @@ int main(int argc, char** argv) {
         std::cout << "[remote] " << op.Message << std::endl;
     });
 
+    //Process any deer::SaidSomething events, part of the deer::Dialogue component
+    view.OnComponentUpdate<deer::Dialogue>(
+        [](const worker::ComponentUpdateOp<deer::Dialogue>& op) {
+            std::cout << "Processing event ops..." << std::endl;
+            //op.Update.said_something will contain a list of all SaidSomething events
+            for (auto it : op.Update.said_something()) {
+                std::cout << "Deer dialogue event: " << it.message() << std::endl;
+            }
+        }
+    );
+
+    view.OnComponentUpdate<deer::Health>(
+        [](const worker::ComponentUpdateOp<deer::Health>& op) {
+            std::cout << "Processing event ops..." << std::endl;
+            for (auto it : op.Update.remaining_health()) {
+                std::cout << "Deer health event: " << it << std::endl;
+            }
+        }
+    );
+
+/*
+    view.OnCommandResponse<deer::Health::Commands::GotShot::Response>(
+        [](const worker::CommandResponseOp<deer::Health::Commands::GotShot::Response>& op) {
+            std::cout << "Received response for command: " << op.Message << std::endl;
+        }
+    );
+*/
     if (is_connected) {
         std::cout << "[local] Connected successfully to SpatialOS, listening to ops... " << std::endl;
     }
 
-    std::cout << "[local] Starting game loopie!" << std::endl;
+    std::cout << "[local] Starting game loop!" << std::endl;
 
     hunter::Name::Update hunter_name_update;
 
@@ -147,9 +190,10 @@ int main(int argc, char** argv) {
             connection.SendComponentUpdate<hunter::Name>(entity_id, hunter_name_update);
         }
 
-        std::cout << "Ending game loop" << std::endl;
+        SendDeerCommandRequest(connection, view);
+
         //Now go to sleep for a bit to avoid excess changes
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(3));
     }
 
     return ErrorExitStatus;

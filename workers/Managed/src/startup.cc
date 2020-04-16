@@ -13,6 +13,7 @@
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
 using ComponentRegistry = worker::Components<
     deer::Health, 
+    deer::Dialogue,
     hunter::Health, 
     hunter::Name, 
     improbable::Position, 
@@ -125,7 +126,8 @@ void AddDeerEntityAcl(worker::Entity& entity, worker::List<WorkerAttribute> read
     worker::Map<worker::ComponentId, improbable::WorkerRequirementSet> component_acl {
         {improbable::Position::ComponentId, writer_requirement_set},
         {improbable::EntityAcl::ComponentId, writer_requirement_set},
-        {deer::Health::ComponentId, writer_requirement_set}
+        {deer::Health::ComponentId, writer_requirement_set},
+        {deer::Dialogue::ComponentId, writer_requirement_set}
     };
 
     //Add to the EntityACl component, Read access for the reader requirement set and write access for writer requirement set
@@ -161,10 +163,11 @@ void AddHunterInterestSphere(worker::Entity& entity) {
                 /*Full Snapshot*/ worker::Option<bool> {false},
                 /*Result Component IDs*/ worker::List<uint32_t>{
                     deer::Health::ComponentId,
+                    deer::Dialogue::ComponentId,
                     improbable::Position::ComponentId,
                     improbable::EntityAcl::ComponentId
                 },
-                /*Frequency*/ worker::Option<float> {30}
+                /*Frequency*/ worker::Option<float> {60}
             }
         }
     };
@@ -183,7 +186,6 @@ void AddHunterInterestSphere(worker::Entity& entity) {
 }
 
 void CreateHunterEntity(worker::Connection& connection, worker::View& view, Hunter hunter, worker::List<WorkerAttribute> readers, WorkerAttribute writer) {
-    std::cout << "Starting hunter entity creation... " << std::endl;
     //Entity Creation
     worker::RequestId<worker::CreateEntityRequest> entity_creation_request_id;
 
@@ -204,7 +206,6 @@ void CreateHunterEntity(worker::Connection& connection, worker::View& view, Hunt
             auto result = connection.SendCreateEntityRequest(entity, op.FirstEntityId, 500);
             if (result) {
                 connection.SendLogMessage(worker::LogLevel::kDebug, "Creating Entity", "Successfully created entity");
-                std::cout << "[local] Successful special entity creation!" << std::endl;
                 entity_creation_request_id = *result;
             } else {
                 connection.SendLogMessage(worker::LogLevel::kError, "Creating Entity", result.GetErrorMessage());
@@ -215,8 +216,56 @@ void CreateHunterEntity(worker::Connection& connection, worker::View& view, Hunt
     });
 }
 
+void AddDeerInterestSphere(worker::Entity& entity) {
+    std::cout << "Adding entity sphere interest..." << std::endl;
+
+    const worker::Option<improbable::ComponentInterest_SphereConstraint> sphere_constraint{
+            improbable::ComponentInterest_SphereConstraint(improbable::Coordinates{0, 0, 0}, 1500)
+    };
+
+    improbable::ComponentInterest_QueryConstraint query_constraint(
+        /*Sphere*/ sphere_constraint,
+        /*Cylinder*/{},
+        /*Box*/ {},
+        /*Relative Sphere*/ {},
+        /*Relative Cylinder*/ {},
+        /*Relative Box*/ {},
+        /*Entity ID*/ {},
+        /*Component ID*/ {},
+        /*And Constraints*/ {},
+        /*Or Constraints*/ {}
+    );
+
+    auto interest = improbable::ComponentInterest {
+        worker::List<improbable::ComponentInterest_Query> {
+            improbable::ComponentInterest_Query {
+                /*Constraint*/ query_constraint,
+                /*Full Snapshot*/ worker::Option<bool> {false},
+                /*Result Component IDs*/ worker::List<uint32_t>{
+                    hunter::Health::ComponentId,
+                    hunter::Name::ComponentId,
+                    improbable::Position::ComponentId,
+                    improbable::EntityAcl::ComponentId
+                },
+                /*Frequency*/ worker::Option<float> {60}
+            }
+        }
+    };
+
+    //Grant 'interest' to the dummy::Name component, so anything w/ write access authority
+    //over dummy::Name gets interested
+    entity.Add<improbable::Interest>(
+        improbable::InterestData {
+            worker::Map<uint, improbable::ComponentInterest> {
+                {deer::Health::ComponentId, interest}
+            }
+        }
+    );
+
+    std::cout << "Entity sphere interest added!" << std::endl;
+}
+
 void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32_t health, worker::List<WorkerAttribute> readers, WorkerAttribute writer) {
-    std::cout << "Starting hunter entity creation... " << std::endl;
     //Entity Creation
     worker::RequestId<worker::CreateEntityRequest> entity_creation_request_id;
 
@@ -230,12 +279,13 @@ void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32
             worker::Entity entity;
             entity.Add<improbable::Position>({{1, 2, 3}});
             entity.Add<deer::Health>({health});
+            entity.Add<deer::Dialogue>({});
             AddDeerEntityAcl(entity, readers, writer);
+            AddDeerInterestSphere(entity);
 
             auto result = connection.SendCreateEntityRequest(entity, op.FirstEntityId, 500);
             if (result) {
                 connection.SendLogMessage(worker::LogLevel::kDebug, "Creating Entity", "Successfully created entity");
-                std::cout << "[local] Successful special entity creation!" << std::endl;
                 entity_creation_request_id = *result;
             } else {
                 connection.SendLogMessage(worker::LogLevel::kError, "Creating Entity", result.GetErrorMessage());
@@ -244,6 +294,14 @@ void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32
             }
         }
     });
+}
+
+void TriggerDeerEvent(worker::Connection& connection, worker::EntityId entity_id, std::string message) {    
+    deer::Dialogue::Update update;
+    deer::SaidSomething event{message};
+
+    update.add_said_something(event);
+    connection.SendComponentUpdate<deer::Dialogue>(entity_id, update);
 }
 
 // Entry point
@@ -319,21 +377,40 @@ int main(int argc, char** argv) {
         std::cout << "[remote] " << op.Message << std::endl;
     });
 
+    view.OnComponentUpdate<hunter::Name>(
+        [](const worker::ComponentUpdateOp<hunter::Name>& op) {
+            for (auto it : op.Update.first_name()) {
+                std::cout << "Hunter first name change: " << it << std::endl;
+            }
+        }
+    );
+
+    view.OnCommandRequest<deer::Health::Commands::GotShot>(
+        [](const worker::CommandRequestOp<deer::Health::Commands::GotShot>& op) {
+            std::cout << "Command received" << op.TimeoutMillis << std::endl;
+            
+            /*
+            connection.SendCommandResponse<deer::Health::Commands::GotShot::Response>(
+                worker::RequestId<worker::IncomingCommandRequest<deer::Health::Commands::GotShot::Request>> {op.RequestId}, 
+                deer::Health::Commands::GotShot::Response {}
+            );
+            */
+        }
+    );
+
     if (is_connected) {
         std::cout << "[local] Connected successfully to SpatialOS, listening to ops... " << std::endl;
     }
 
     //Create entity test object
     //For some reason, myWorker has 'simulation' attribute in inspector instead of 'AI' attribute
-    for (int i = 0; i < 1000; i++) {
-        CreateDeerEntity(connection, view, 100,
-            worker::List<WorkerAttribute> {WorkerAttribute::AI, WorkerAttribute::client, WorkerAttribute::simulation}, 
-            WorkerAttribute::simulation
-        );
-    }
+    CreateDeerEntity(connection, view, 100,
+        worker::List<WorkerAttribute> {WorkerAttribute::simulation, WorkerAttribute::AI, WorkerAttribute::client}, 
+        WorkerAttribute::simulation
+    );
 
     CreateHunterEntity(connection, view, Hunter(444, "Joshie", "Hunter"), 
-        worker::List<WorkerAttribute> {WorkerAttribute::AI, WorkerAttribute::client, WorkerAttribute::simulation},
+        worker::List<WorkerAttribute> {WorkerAttribute::simulation, WorkerAttribute::AI, WorkerAttribute::client},
         WorkerAttribute::AI
     );
 
@@ -356,22 +433,23 @@ int main(int argc, char** argv) {
         //Process ops so entities and components get added automatically
         view.Process(ops);
 
-        std::cout << "About to process entities..." << std::endl;
         //Now let's iterate over all entities and update their components
         for (auto it = view.Entities.begin(); it != view.Entities.end(); it++) {
             auto entity_id = it -> first;
-            std::cout << "Updating entity ID " << entity_id << std::endl;
+
+            uint32_t current_health = random_health(0, 100);
 
             //Make random values:
-            deer_health_update.set_remaining_health(random_health(0, 100));
+            deer_health_update.set_remaining_health(current_health);
 
             //Send updates to SpatialOS!
             connection.SendComponentUpdate<deer::Health>(entity_id, deer_health_update);
 
-            std::cout << "End Entity update" << std::endl;
+            //Send an event to be received by other workers
+            std::string message = "Deer # " + std::to_string(entity_id) + "says its health is " + std::to_string(current_health);
+            TriggerDeerEvent(connection, entity_id, message);
         }
 
-        std::cout << "Ending game loop" << std::endl;
         //Now go to sleep for a bit to avoid excess changes
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
