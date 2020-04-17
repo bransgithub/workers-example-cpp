@@ -8,13 +8,19 @@ type Shot {
   uint32 damage = 1;
 }
 
+type Recovered {
+  uint32 amount = 1;
+}
+
 component Health {
   id = 10005;
-  uint32 remaining_health = 10006;
+  uint32 remaining_health = 1;
   command Shot got_shot(Shot);
+  event Recovered recovered;
 }
 
 component Dialogue {
   id = 10006;
+  string name = 1;
   event SaidSomething said_something;
 }

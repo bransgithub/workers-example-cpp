@@ -279,7 +279,7 @@ void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32
             worker::Entity entity;
             entity.Add<improbable::Position>({{1, 2, 3}});
             entity.Add<deer::Health>({health});
-            entity.Add<deer::Dialogue>({});
+            entity.Add<deer::Dialogue>({"bambi"});
             AddDeerEntityAcl(entity, readers, writer);
             AddDeerInterestSphere(entity);
 
@@ -296,7 +296,15 @@ void CreateDeerEntity(worker::Connection& connection, worker::View& view, uint32
     });
 }
 
-void TriggerDeerEvent(worker::Connection& connection, worker::EntityId entity_id, std::string message) {    
+void TriggerDeerHealthEvent(worker::Connection& connection, worker::EntityId entity_id, uint32_t recovered_health) {    
+    deer::Health::Update update;
+    deer::Recovered event{recovered_health};
+
+    update.add_recovered(event);
+    connection.SendComponentUpdate<deer::Health>(entity_id, update);
+}
+
+void TriggerDeerDialogueEvent(worker::Connection& connection, worker::EntityId entity_id, std::string message) {    
     deer::Dialogue::Update update;
     deer::SaidSomething event{message};
 
@@ -377,6 +385,7 @@ int main(int argc, char** argv) {
         std::cout << "[remote] " << op.Message << std::endl;
     });
 
+    //Doesn't work
     view.OnComponentUpdate<hunter::Name>(
         [](const worker::ComponentUpdateOp<hunter::Name>& op) {
             for (auto it : op.Update.first_name()) {
@@ -445,7 +454,8 @@ int main(int argc, char** argv) {
 
             //Send an event to be received by other workers
             std::string message = "Deer # " + std::to_string(entity_id) + "says its health is " + std::to_string(current_health);
-            TriggerDeerEvent(connection, entity_id, message);
+            TriggerDeerHealthEvent(connection, entity_id, 10);
+            TriggerDeerDialogueEvent(connection, entity_id, message);
         }
 
         //Now go to sleep for a bit to avoid excess changes

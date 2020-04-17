@@ -50,7 +50,7 @@ std::string get_random_characters(size_t count) {
 }
 
 void SendDeerCommandRequest(worker::Connection& connection, worker::View& view) {
-    const worker::Option<uint32_t> timeout_ms {500};
+    const worker::Option<uint32_t> timeout_ms {1000};
 
     for (auto it = view.Entities.begin(); it != view.Entities.end(); it++) {
         auto entity_id = it -> first;
@@ -137,6 +137,7 @@ int main(int argc, char** argv) {
         std::cout << "[remote] " << op.Message << std::endl;
     });
 
+    //Doesn't work
     //Process any deer::SaidSomething events, part of the deer::Dialogue component
     view.OnComponentUpdate<deer::Dialogue>(
         [](const worker::ComponentUpdateOp<deer::Dialogue>& op) {
@@ -148,11 +149,12 @@ int main(int argc, char** argv) {
         }
     );
 
+    //Doesn't work
     view.OnComponentUpdate<deer::Health>(
         [](const worker::ComponentUpdateOp<deer::Health>& op) {
             std::cout << "Processing event ops..." << std::endl;
-            for (auto it : op.Update.remaining_health()) {
-                std::cout << "Deer health event: " << it << std::endl;
+            for (auto it : op.Update.recovered()) {
+                std::cout << "Deer health recovered: " << it.amount() << std::endl;
             }
         }
     );
@@ -192,7 +194,7 @@ int main(int argc, char** argv) {
         SendDeerCommandRequest(connection, view);
 
         //Now go to sleep for a bit to avoid excess changes
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 
     return ErrorExitStatus;
